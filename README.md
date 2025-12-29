@@ -5,6 +5,7 @@ can be used with cron to manage a tiered structure, e.g. some hourly, daily, mon
 example:
 ```
 0 3 * * Sun /root/bin/rotate_snapshots.sh zroot/data 4 weekly
-0 3 1 * * /root/bin/rotate_snapshots.sh zroot/data 3 monthly weekly
+0 3 1 * * /root/bin/rotate_snapshots.sh zroot/data 12 monthly weekly
+0 3 1 1 * /root/bin/rotate_snapshots.sh zroot/data 3 yearly monthly
 ```
 
