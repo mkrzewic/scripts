@@ -20,7 +20,7 @@ zfs_snaprotate()
 
   oldestsnap=""
   if [ -n "$spill_from" ]; then
-    oldestsnap=$(zfs list -Ht snap "$dataset" |grep "@${spill_from}"| awk 'NR==1 {print $1}')
+    oldestsnap=$(zfs list -Ht snap "$dataset" -o name|grep "@${spill_from}"| head -n1)
   fi
   if [ -n "$oldestsnap" ]; then
     hijackedsnap=$(echo "$oldestsnap" | sed "s/@${spill_from}/@${tag_prefix}/")
@@ -33,7 +33,7 @@ zfs_snaprotate()
   #reduce the number of existing snapshots to the desired one (zero is also an option)
   ndatasets=$(zfs list -Ht snap "$dataset" | grep "@${tag_prefix}" | wc -l)
   while [ "$ndatasets" -gt "$nmaxdatasets" ]; do
-    oldestsnap=$(zfs list -Ht snap "$dataset" |grep "@${tag_prefix}"| awk 'NR==1 {print $1}')
+    oldestsnap=$(zfs list -Ht snap "$dataset" -o name|grep "@${tag_prefix}"| head -n1)
     zfs destroy "$oldestsnap"
 
     #prevent an endless loop if not exactly one dataset gets destroyed
