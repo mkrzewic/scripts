@@ -31,6 +31,8 @@ zfs_snaprotate()
   fi
   if [ -n "$oldestsnap" ]; then
     hijackedsnap=$(echo "$oldestsnap" | sed "s/@${spill_from}/@${tag_prefix}/")
+    #TODO a race condition where other jobs rotate the oldest snapshot away
+    #     clean up!
     zfs rename "$oldestsnap" "$hijackedsnap"
   else
     zfs snap "$dataset@$zfs_snapshot_tag"
@@ -45,6 +47,8 @@ zfs_snaprotate()
 
     #prevent an endless loop if not exactly one dataset gets destroyed
     #zfs docs say nothing about the return code of zfs-destroy so check directly
+    #even if the destroy fails as oldest snap gets promoted to a different pool
+    #it still disapplears from here so we accept
     _ndatasets=$(zfs list -Ht snap "$dataset" | grep "@${tag_prefix}" |wc -l)
     if [ $(($ndatasets - $_ndatasets)) -ne 1 ]
     then
