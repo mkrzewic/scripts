@@ -2,7 +2,7 @@ zfs_oldestsnap()
 {
   # $1 dataset
   # $2 prefix
-  zfs list -Ht snap "$1" -o name|grep "@${2}"| head -n1
+  2>/dev/null zfs list -Ht snap "$1" -o name|grep "@${2}"| head -n1
 }
 
 zfs_snaprotate()
@@ -23,22 +23,31 @@ zfs_snaprotate()
   tag_prefix="${3:-"snaprotate"}"
   spill_from="$4"
 
-  zfs_snapshot_tag=$(date "+${tag_prefix}_%Y_%m_%d_%H:%M:%S")
 
-  oldestsnap=""
+  hijacked=1
   if [ -n "$spill_from" ]; then
-    oldestsnap=$(zfs_oldestsnap "$dataset" "$spill_from")
+  #snap loop  
+  #this loop is essentially a spinlock, avoids a race condition with the destroy loop
+  #as cron might run things concurrently
+    while [ $hijacked -ne 0 ]
+    do
+      hijacked=1
+      oldestsnap=$(zfs_oldestsnap "$dataset" "$spill_from")
+      [ -z "$oldestsnap" ] && break
+      hijackedsnap=$(echo "$oldestsnap" | sed "s/@${spill_from}/@${tag_prefix}/")
+      2>/dev/null zfs rename "$oldestsnap" "$hijackedsnap"
+      hijacked=$?
+    done
   fi
-  if [ -n "$oldestsnap" ]; then
-    hijackedsnap=$(echo "$oldestsnap" | sed "s/@${spill_from}/@${tag_prefix}/")
-    #TODO a race condition where other jobs rotate the oldest snapshot away
-    #     clean up!
-    zfs rename "$oldestsnap" "$hijackedsnap"
-  else
+  if [ $hijacked == 1 ]; then
+    zfs_snapshot_tag=$(date "+${tag_prefix}_%Y_%m_%d_%H:%M:%S")
     zfs snap "$dataset@$zfs_snapshot_tag"
+    echo "$dataset@$zfs_snapshot_tag"
+  else
+    echo "$hijackedsnap"
   fi
-  echo "$dataset@$zfs_snapshot_tag"
 
+  #destroy loop
   #reduce the number of existing snapshots to the desired one (zero is also an option)
   ndatasets=$(zfs list -Ht snap "$dataset" | grep "@${tag_prefix}" | wc -l)
   while [ "$ndatasets" -gt "$nmaxdatasets" ]; do
@@ -48,7 +57,7 @@ zfs_snaprotate()
     #prevent an endless loop if not exactly one dataset gets destroyed
     #zfs docs say nothing about the return code of zfs-destroy so check directly
     #even if the destroy fails as oldest snap gets promoted to a different pool
-    #it still disapplears from here so we accept
+    #it still disappears from here so we accept
     _ndatasets=$(zfs list -Ht snap "$dataset" | grep "@${tag_prefix}" |wc -l)
     if [ $(($ndatasets - $_ndatasets)) -ne 1 ]
     then
