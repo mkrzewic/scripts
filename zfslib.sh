@@ -18,13 +18,15 @@ zfs_snaprotate()
       return 1;
     }
 
-  dataset=$1
-  nmaxdatasets="${2:-"4"}"
-  tag_prefix="${3:-"snaprotate"}"
-  spill_from="$4"
+  local dataset=$1
+  local nmaxdatasets="${2:-"4"}"
+  local tag_prefix="${3:-"snaprotate"}"
+  local spill_from="$4"
 
+  local hijacked=1
+  local oldestsnap=""
+  local targetsnap=""
 
-  hijacked=1
   if [ -n "$spill_from" ]; then
   #snap loop  
   #this loop is essentially a spinlock, avoids a race condition with the destroy loop
@@ -34,18 +36,17 @@ zfs_snaprotate()
       hijacked=1
       oldestsnap=$(zfs_oldestsnap "$dataset" "$spill_from")
       [ -z "$oldestsnap" ] && break
-      hijackedsnap=$(echo "$oldestsnap" | sed "s/@${spill_from}/@${tag_prefix}/")
-      2>/dev/null zfs rename "$oldestsnap" "$hijackedsnap"
+      targetsnap=$(echo "$oldestsnap" | sed "s/@${spill_from}/@${tag_prefix}/")
+      2>/dev/null zfs rename "$oldestsnap" "$targetsnap"
       hijacked=$?
     done
   fi
   if [ $hijacked == 1 ]; then
-    zfs_snapshot_tag=$(date "+${tag_prefix}_%Y_%m_%d_%H:%M:%S")
-    zfs snap "$dataset@$zfs_snapshot_tag"
-    echo "$dataset@$zfs_snapshot_tag"
-  else
-    echo "$hijackedsnap"
+    targetsnap="$dataset"@$(date "+${tag_prefix}_%Y_%m_%d_%H:%M:%S")
+    zfs snap "$targetsnap"
   fi
+  
+  echo "$targetsnap"
 
   #destroy loop
   #reduce the number of existing snapshots to the desired one (zero is also an option)
