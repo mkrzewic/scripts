@@ -29,8 +29,10 @@ zfs_snaprotate()
 
   if [ -n "$spill_from" ]; then
   #snap loop  
-  #this loop is essentially a spinlock, avoids a race condition with the destroy loop
-  #as cron might run things concurrently
+  #This loop is essentially a spinlock, avoids a race condition with the destroy loop
+  #as cron might run things concurrently.
+  #Atomicity can be achieved with zfs-program(8) but that needs to run with root priviledges.
+  #This works for any user with snapshotting permissions in any not too crazy a scenario.
     while [ $hijacked -ne 0 ]
     do
       hijacked=1
